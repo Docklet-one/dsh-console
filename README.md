@@ -22,4 +22,4 @@ node tools/build-v3.mjs      # 把 app/src/v3/*.js 拼成 app/v3.js
 ## 返回约定
 
 页面通过 `docklet.onBack(handler)` 注册同步处理器，返回 `'handled'` 表示这次返回被
-页面消费，返回 `'exit'` 表示让壳关闭模块。详见壳仓库的 `module-platform.md`。
+页面消费，返回 `'exit'` 表示让壳关闭模块。

@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>DSH 控制台</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #f2f4f7; }
+    #root { height: 100%; }
+    #v3SyncTimeout { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(30,38,45,.32); }
+    #v3SyncTimeout .v3-timeout-card { width: 100%; max-width: 340px; padding: 20px; border-radius: 18px; background: #fff; color: #1f2a30; box-shadow: 0 16px 48px rgba(20,35,45,.25); }
+    #v3SyncTimeout h3 { margin: 0 0 8px; font-size: 18px; }
+    #v3SyncTimeout p { margin: 0 0 16px; font-size: 13px; line-height: 1.55; color: #657380; }
+    #v3SyncTimeout button { width: 100%; margin-top: 8px; padding: 12px; border: 0; border-radius: 12px; background: #3f7f9f; color: #fff; font-size: 14px; }
+    #v3SyncTimeout button.ghost { background: #eef3f6; color: #31576b; }
+  </style>
+  <link rel="stylesheet" href="./style.css?v=0.10.50">
+</head>
+<body>
+  <div id="root"></div>
+  <script src="/__docklet/sdk.js"></script>
+  <script type="module">
+    import mount from './v3.js'
+
+    const KEYS = [
+      'v3.lan', 'v3.wan', 'v3.base', 'v3.token', 'v3.mode', 'v3.session',
+      'v3.name', 'v3.aiName', 'v3.avatar', 'v3.aiAvatar',
+      'v3.notify', 'v3.notifyMode'
+    ]
+    const pending = new Map()
+    let flushTimer = 0
+    let ready = false
+    const persistKey = (key) => KEYS.includes(String(key)) || String(key).startsWith('v3.cache.') || String(key).startsWith('v3.actions.') || String(key).startsWith('v3.model.')
+    let watchPolicy = null
+
+    const native = window.docklet && window.docklet.mock === false
+    const storage = native ? window.docklet.storage : null
+    const originalSet = Storage.prototype.setItem
+    const originalRemove = Storage.prototype.removeItem
+    const originalClear = Storage.prototype.clear
+
+    async function initDb() {
+      if (!storage) return
+      await storage.exec(
+        'CREATE TABLE IF NOT EXISTS v3_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+        []
+      )
+    }
+
+    async function seed() {
+      if (!storage) return
+      const rows = await storage.query('SELECT key, value FROM v3_settings', [])
+      if (!rows || rows.length === 0) {
+        // The shell may keep WebView localStorage after "clear data".
+        // An empty settings DB means the user cleared data: do not let stale
+        // v3.* values silently reconnect to the old IP/token.
+        for (const key of Object.keys(localStorage)) {
+          if (String(key).startsWith('v3.')) originalRemove.call(localStorage, key)
+        }
+        return
+      }
+      for (const row of rows || []) {
+        if (row && persistKey(row.key)) originalSet.call(localStorage, row.key, row.value)
+      }
+    }
+
+    function scheduleFlush() {
+      if (!storage) return
+      window.clearTimeout(flushTimer)
+      flushTimer = window.setTimeout(() => { flush().catch(() => {}) }, 300)
+    }
+
+    async function flush() {
+      if (!storage || !pending.size) return
+      const entries = [...pending.entries()]
+      pending.clear()
+      try {
+        for (const [key, value] of entries) {
+          if (value == null) {
+            await storage.exec('DELETE FROM v3_settings WHERE key = ?', [key])
+          } else {
+            await storage.exec(
+              'INSERT OR REPLACE INTO v3_settings(key, value) VALUES (?, ?)',
+              [key, value]
+            )
+          }
+        }
+        await pruneCache()
+      } catch (error) {
+        for (const [key, value] of entries) if (!pending.has(key)) pending.set(key, value)
+      }
+    }
+
+    async function pruneCache() {
+      if (!storage) return
+      try {
+        const rows = await storage.query(
+          "SELECT COUNT(*) AS n FROM v3_settings WHERE key LIKE 'v3.cache.%'",
+          []
+        )
+        const count = rows && rows[0] ? Number(rows[0].n) || 0 : 0
+        if (count <= 24) return
+        await storage.exec(
+          "DELETE FROM v3_settings WHERE key LIKE 'v3.cache.%' AND key NOT IN ("
+            + "SELECT key FROM v3_settings WHERE key LIKE 'v3.cache.%' "
+            + "ORDER BY rowid DESC LIMIT 24)",
+          []
+        )
+      } catch (_) {
+        /* cache pruning is best effort */
+      }
+    }
+
+    function backgroundMessagesApi() {
+      return window.docklet && window.docklet.backgroundMessages;
+    }
+
+    async function startWatchService(policy) {
+      try {
+        const endpoint = String((policy && policy.endpoint) || '')
+        const base = endpoint.replace(/\/health\/?$/, '')
+        if (!base) return false
+        const params = new URLSearchParams()
+        if (policy && policy.token) params.set('token', policy.token)
+        // mode is reserved for a later release: the shell currently turns every
+        // finished turn into one reminder. V3 always asks for turn.
+        const mode = policy && policy.mode === 'message' ? 'message' : 'turn'
+        params.set('mode', mode)
+        await window.docklet.backgroundMessages.subscribe({
+          endpoint: base + '/sessions?' + params.toString(),
+          transport: 'sse',
+          headers: policy && policy.token ? { Authorization: 'Bearer ' + policy.token } : undefined,
+          eventTypes: ['turn.end'],
+          foreground: 'notify',
+          sessionField: 'session',
+          dedupeBy: 'eventId',
+          persist: true,
+        })
+        return true
+      } catch (_) {
+        return false
+      }
+    }
+
+    async function stopWatchService() {
+      watchPolicy = null
+      if (!backgroundMessagesApi()) return
+      try {
+        await window.docklet.backgroundMessages.unsubscribe()
+      } catch (_) {
+        /* the shell clears the stored subscription defensively */
+      }
+    }
+
+    async function setActiveSession(sessionId) {
+      const bg = backgroundMessagesApi()
+      if (bg && typeof bg.setActiveSession === 'function') {
+        try {
+          await bg.setActiveSession(sessionId || null)
+        } catch (_) {
+          /* ignore */
+        }
+      }
+    }
+
+    async function uploadV3(path, payload) {
+      const base = (localStorage.getItem('v3.base') || localStorage.getItem('v3.lan') || '').replace(/\/+$/, '')
+      const token = localStorage.getItem('v3.token') || ''
+      if (!base) throw new Error('还没有连接地址')
+      const headers = { 'Content-Type': 'application/json' }
+      if (token) headers.Authorization = 'Bearer ' + token
+      const response = await fetch(base + path, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload || {}),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || ('HTTP ' + response.status))
+      return body.attachment
+    }
+
+    function patchStorage() {
+      if (!storage) return
+      Storage.prototype.setItem = function (key, value) {
+        originalSet.call(this, key, value)
+        if (persistKey(key)) {
+          pending.set(String(key), String(value))
+          scheduleFlush()
+        }
+        if (String(key) === 'v3.notify') {
+          if (String(value) === '1' && watchPolicy) {
+            startWatchService(watchPolicy).catch(() => {})
+          } else if (String(value) !== '1') {
+            stopWatchService().catch(() => {})
+          }
+        }
+      }
+      Storage.prototype.removeItem = function (key) {
+        originalRemove.call(this, key)
+        if (persistKey(key)) {
+          pending.set(String(key), null)
+          scheduleFlush()
+        }
+      }
+      Storage.prototype.clear = function () {
+        originalClear.call(this)
+        pending.clear()
+        if (storage) storage.exec('DELETE FROM v3_settings', []).catch(() => {})
+      }
+    }
+
+    async function boot() {
+      if (native) {
+        await initDb()
+        await seed()
+        try {
+          const info = await window.docklet.shellInfo()
+          const initial = info && info.initial && info.initial.sessionId
+          if (initial) {
+            originalSet.call(localStorage, 'v3.session', initial)
+            pending.set('v3.session', initial)
+            scheduleFlush()
+          }
+        } catch (_) {
+          /* shell.info is optional */
+        }
+      }
+      patchStorage()
+
+      window.addEventListener('docklet:session', async (event) => {
+        const id = event && event.detail && event.detail.sessionId
+        if (!id || id === localStorage.getItem('v3.session')) return
+        originalSet.call(localStorage, 'v3.session', id)
+        pending.set('v3.session', id)
+        try {
+          await flush()
+        } catch (_) {
+          /* in-memory value is already set */
+        }
+        if (typeof window.__dockletSwitchSession === 'function') {
+          window.__dockletSwitchSession(id)
+          return
+        }
+        location.reload()
+      })
+
+      mount(document.getElementById('root'), {
+        manifest: { id: 'dsh-console', version: '0.10.50' },
+        ui: { onInsetsChange() {} },
+        setActiveSession: (id) => setActiveSession(id),
+        network: window.docklet && window.docklet.network,
+        watch: {
+          ensurePermission: async () => true,
+          test: async () => {
+            await window.docklet.notify.show({
+              title: 'DSH 测试提醒',
+              body: '通知通道正常',
+              tag: 'v3-beta-test',
+            })
+          },
+          start: async (policy) => {
+            watchPolicy = policy || null
+            return startWatchService(watchPolicy)
+          },
+          stop: async () => {
+            await stopWatchService()
+          },
+          status: async () => {
+            try {
+              const state = await window.docklet.backgroundMessages.getState()
+              return {
+                running: Boolean(state && state.subscribed),
+                state: (state && state.state) || '',
+              }
+            } catch (_) {
+              return { running: false, state: '' }
+            }
+          },
+        },
+        openExternal: (url) => window.docklet.openExternal(url),
+        saveImage: async (data, name, mime) => {
+          const path = 'downloads/' + name
+          await window.docklet.files.write(path, data, { encoding: 'base64' })
+          await window.docklet.files.download(path, { mime })
+        },
+        notify: (options) => window.docklet.notify.show(options || {}),
+        download: (url, filename, options) => window.docklet.download(url, filename, options),
+        uploadImage: (payload) => uploadV3('/upload-image', payload),
+        uploadFile: (payload) => uploadV3('/upload-file', payload),
+      })
+
+      window.addEventListener('pagehide', () => {
+        flush().catch(() => {})
+      })
+      window.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') flush().catch(() => {})
+      })
+
+      if (window.docklet) {
+        if (localStorage.getItem('v3.notify') !== '1') {
+          stopWatchService().catch(() => {})
+        }
+        window.docklet.lifecycle.setHandler(async (action) => {
+          if (action === 'save' || action === 'pause') await flush()
+        })
+        if (!ready) {
+          ready = true
+          window.docklet.ready()
+        }
+      }
+    }
+
+    boot().catch((error) => {
+      document.getElementById('root').textContent = '启动失败：' + String(error.message || error)
+      if (window.docklet) window.docklet.ready()
+    })
+  </script>
+</body>
+</html>

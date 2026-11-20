@@ -370,6 +370,7 @@
   .v3opt.v3test-btn{margin-left:auto;background:#edf2f6;border-color:#dfe6ec;color:#2f6f8f}
   .v3token-input{position:relative;display:flex;align-items:center}
   .v3token-input .v3form-input{padding-right:42px}
+.v3token-input .v3form-input.v3masked{-webkit-text-security:disc}
   .v3eye{position:absolute;right:4px;width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:#7a8794;display:grid;place-items:center}
   .v3eye svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   .v3field input{width:100%;padding:9px 10px;border:1px solid #d9e1e7;border-radius:9px;background:#fff;font:inherit;color:#17212b}

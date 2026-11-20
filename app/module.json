@@ -3,7 +3,7 @@
   "name": "DSH 控制台",
   "kind": "控制台",
   "glyph": "terminal",
-  "version": "0.10.52",
+  "version": "0.10.53",
   "entry": "index.html",
   "chrome": "none",
   "minShell": "1.1.0",

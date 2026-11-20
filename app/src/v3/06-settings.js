@@ -224,7 +224,7 @@ function Te() {
       await new Promise((resolve) => setTimeout(resolve, 650));
       for (const x of Object.keys(localStorage))
         x.startsWith("v3.") && localStorage.removeItem(x);
-      e.lanBase = re, e.wanBase = "", e.base = re, e.token = "", e.profile = { ...Oe }, e.profileDraft = null, e.notify = { enabled: !1, mode: "turn" }, Ke();
+      e.lanBase = re, e.wanBase = "", e.base = re, e.token = "", e.profile = { ...Oe }, e.profileDraft = null, e.notify = { enabled: !0, mode: "turn" }, localStorage.setItem("v3.notify", "1"), Ke();
       U("已恢复初始化");
       window.setTimeout(() => location.reload(), 700);
     };

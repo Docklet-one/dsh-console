@@ -64,7 +64,10 @@ function da(a, n) {
     },
     profileDraft: null,
     notify: {
-      enabled: localStorage.getItem("v3.notify") === "1",
+      // 默认开启：没有存过值时按开启算（用户手动关掉才记 "0"）
+      enabled: localStorage.getItem("v3.notify") === null
+        ? !0
+        : localStorage.getItem("v3.notify") === "1",
       mode: "turn"
     },
     openSection: "",

@@ -3995,8 +3995,22 @@ function da(a, n) {
     });
   }
   window.__dockletSwitchSession = Pe;
-  // Shell back gesture: handle in-app layers first, only then let the shell close the module.
+  // Shell back gesture: handle in-app layers first, only then let the shell close
+  // the module. The signature guard is what keeps an unconfigured (or otherwise
+  // stuck) screen from swallowing back forever: if the handler ran but nothing
+  // visible changed, we tell the shell to close the module.
+  function backSignature() {
+    const viewer = t.querySelector("#viewer");
+    const openViewer = viewer && !viewer.hidden ? "viewer" : "";
+    const sheet = e.modelSheet || e.connSheet ? "sheet" : "";
+    const search = e.sessionQuery
+      || (document.activeElement && document.activeElement.id === "sessionSearch")
+      ? "search"
+      : "";
+    return [e.route || "", openViewer, sheet, search].join("|");
+  }
   window.__dockletBack = () => {
+    const before = backSignature();
     const viewer = t.querySelector("#viewer");
     if (viewer && !viewer.hidden) {
       viewer.hidden = true;
@@ -4006,29 +4020,20 @@ function da(a, n) {
         viewerReset();
       } catch (_) {
       }
-      return "handled";
-    }
-    if (e.modelSheet || e.connSheet) {
+    } else if (e.modelSheet || e.connSheet) {
       dismissSheet();
-      return "handled";
-    }
-    if (e.route === "sessions") {
+    } else if (e.route === "sessions") {
       if (e.sessionQuery || (document.activeElement && document.activeElement.id === "sessionSearch")) {
         exitSessionSearch();
-        return "handled";
+      } else {
+        H("chat");
       }
-      H("chat");
-      return "handled";
-    }
-    if (e.route === "actions" || e.route === "archived") {
+    } else if (e.route === "actions" || e.route === "archived") {
       H("sessions");
-      return "handled";
-    }
-    if (e.route !== "chat") {
+    } else if (e.route !== "chat") {
       H("chat");
-      return "handled";
     }
-    return "exit";
+    return backSignature() === before ? "exit" : "handled";
   };
   function H(s) {
     e.route = s, syncActiveSession(), s === "settings" && (e.profileDraft = { ...e.profile }), s === "chat" && (e.profileDraft = null, e.pinBottom = !0), s !== "sessions" && s !== "actions" && (e.sessionMenu = null), $(), s === "sessions" && Ce(), s === "create" && se();

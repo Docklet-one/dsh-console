@@ -1337,7 +1337,7 @@ function oa({ appId: a, base: n, token: t, notify: r, mode: c = "turn" }) {
     failText: "指令执行失败"
   };
 }
-const ra = ``, re = "http://192.168.2.6:8788", Oe = {
+const ra = ``, re = "", Oe = {
   meName: "DSH用户",
   aiName: "DSH助手",
   meAvatar: "",

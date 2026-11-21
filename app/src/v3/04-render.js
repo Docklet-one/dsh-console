@@ -50,6 +50,7 @@ function he() {
   }
   const msgHtmlCache = new Map();
   let lastRowSigs = null;
+  let lastDeliverableSig = "";
   let lastViewTurns = 0;
   function textHash(value) {
     const text = String(value || "");
@@ -78,7 +79,13 @@ function he() {
   function composerSig() {
     return (e.uploading ? 1 : 0) + "|" + (e.attachments || []).map((a) => a.name || a.kind || "").join("~");
   }
+  function deliverableSig() {
+    const list = e.state && Array.isArray(e.state.deliverables) ? e.state.deliverables : [];
+    return list.map((d) => (Number(d.seq) || 0) + ":" + (Number(d.endSeq) || 0) + ":" + (d.pending ? 1 : 0)).join(",");
+  }
   function renderChatUpdate() {
+    // 交付变化必须整页重建：快速路径只更新消息行，不重建交付卡片。
+    if (deliverableSig() !== lastDeliverableSig) return false;
     const stats = window.__v3Stats || (window.__v3Stats = { fast: 0, full: 0 });
     if (e.modelSheet || e.connSheet || e.sessionMenu) return false;
     if (composerSig() !== lastComposerSig) return false;
@@ -97,6 +104,7 @@ function he() {
       const stick = e.stickBottom || e.pinBottom;
       msgsEl.innerHTML = xe();
       lastRowSigs = gt(e.state).map(messageSig);
+      lastDeliverableSig = deliverableSig();
       lastViewTurns = Number(e.viewTurns) || 5;
       if (e.anchorOlder) {
         list.scrollTop = e.anchorOlder.top + (list.scrollHeight - e.anchorOlder.height);

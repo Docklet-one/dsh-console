@@ -1,7 +1,7 @@
 {
   "id": "dsh-console",
   "name": "DSH 控制台",
-  "version": "0.10.56",
+  "version": "0.10.64",
   "icon": "icon.png",
   "glyph": "terminal",
   "accent": "#3F6F8F",
@@ -18,7 +18,7 @@
     "clipboard",
     "openExternal"
   ],
-  "description": "完整 V3 UI 迁移验证：SQLite 设置、HTTP、SSE",
+  "description": "连接到电脑上的 DSH，在手机上查看和继续会话：发消息、看输出、确认审批都能完成。离开电脑时接着用，同一网络下填好地址和令牌即可。",
   "chrome": "none",
   "data": "dsh-console",
   "permissions": [
@@ -27,5 +27,6 @@
       "reason": "接收新消息提醒"
     }
   ],
-  "order": 0
+  "order": 0,
+  "tagline": "把电脑上的 DSH 接到手机上"
 }

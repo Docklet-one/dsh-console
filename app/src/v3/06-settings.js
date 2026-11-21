@@ -701,6 +701,7 @@ function Te() {
     const label = modelChipLabel();
     if (label && label !== "模型") writeModelLabel(session.id, label);
   }
+
   function openModelSheet() {
     const info = qe(e.state) || {};
     const model = info.model;
@@ -1058,6 +1059,7 @@ function Te() {
     lastComposerSig = composerSig();
     applyFoldState(t);
     lastRowSigs = gt(e.state).map(messageSig);
+    lastDeliverableSig = deliverableSig();
     lastViewTurns = Number(e.viewTurns) || 5;
     const freshList = t.querySelector("#list");
     if (freshList) freshList.scrollTop = previousScroll;

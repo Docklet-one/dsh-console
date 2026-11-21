@@ -14,7 +14,7 @@
     #v3SyncTimeout button { width: 100%; margin-top: 8px; padding: 12px; border: 0; border-radius: 12px; background: #3f7f9f; color: #fff; font-size: 14px; }
     #v3SyncTimeout button.ghost { background: #eef3f6; color: #31576b; }
   </style>
-  <link rel="stylesheet" href="./style.css?v=0.10.50">
+  <link rel="stylesheet" href="./style.css?v=0.10.64">
 </head>
 <body>
   <div id="root"></div>
@@ -245,7 +245,7 @@
       })
 
       mount(document.getElementById('root'), {
-        manifest: { id: 'dsh-console', version: '0.10.50' },
+        manifest: { id: 'dsh-console', version: '0.10.64' },
         ui: { onInsetsChange() {} },
         setActiveSession: (id) => setActiveSession(id),
         network: window.docklet && window.docklet.network,

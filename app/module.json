@@ -1,18 +1,31 @@
 {
   "id": "dsh-console",
   "name": "DSH 控制台",
-  "kind": "控制台",
+  "version": "0.10.56",
+  "icon": "icon.png",
   "glyph": "terminal",
-  "version": "0.10.55",
+  "accent": "#3F6F8F",
+  "kind": "控制台",
   "entry": "index.html",
-  "chrome": "none",
   "minShell": "1.1.0",
-  "capabilities": ["network", "storage", "notify", "background", "files", "download", "clipboard", "openExternal"],
-  "data": "dsh-console",
-  "permissions": [
-    { "name": "notifications", "reason": "接收新消息提醒" }
+  "capabilities": [
+    "network",
+    "storage",
+    "notify",
+    "background",
+    "files",
+    "download",
+    "clipboard",
+    "openExternal"
   ],
   "description": "完整 V3 UI 迁移验证：SQLite 设置、HTTP、SSE",
-  "accent": "#3F6F8F",
+  "chrome": "none",
+  "data": "dsh-console",
+  "permissions": [
+    {
+      "name": "notifications",
+      "reason": "接收新消息提醒"
+    }
+  ],
   "order": 0
 }
